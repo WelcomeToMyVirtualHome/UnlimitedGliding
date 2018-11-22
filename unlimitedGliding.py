@@ -3,26 +3,48 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 class Drone:
-	def __init__(self):
+	def __init__(self,max_move):
 		self.x = 0
 		self.y = 0
-		self.known_thermals = []
-		self.max_move_increment = 5
+		self.max_move = max_move
+
+	def __init__(self,x,y,max_move):
+		self.x = x
+		self.y = y
+		self.max_move = max_move
+
 	def set_pos(self, x,y):
 		self.x = x
 		self.y = y
+
 	def move(self, dx, dy):
-		self.x = self.x + self.max_move_increment
-		self.y = self.y + self.max_move_increment
+		self.x = self.x + dx
+		self.y = self.y + dy
 	def boundary_conditions(self, bound):
 		self.x = self.x % bound
 		self.y = self.y % bound
-		
+
+	def fly(self, dx, dy, bound, known_thermals):
+		can_go = []
+		is_in_rectangle = lambda dx, dy : (self.x + dx) % bound <= thermal.x & (self.y + dy) % bound <= thermal.y 
+		for thermal in known_thermals:
+			if is_in_rectangle(dx,dy):
+				can_go.append(thermal)
+		if len(can_go) == 0:
+			return known_thermals		
+		thermal = known_thermals[np.random.randint(0,len(can_go))]
+		self.x = thermal.x
+		self.y = thermal.y
+		known_thermals.append(Thermal(self.x,self.y,thermal.H))
+		known_thermals.remove(thermal)
+		return known_thermals
+
 class Thermal:
 	def __init__(self, x,y,H):
 		self.x = x
 		self.y = y
 		self.H = H
+
 	def set_pos(self, x,y):
 		self.x = x
 		self.y = y
@@ -33,30 +55,31 @@ class Simulation:
 		self.n_therm = n_therm
 		self.n_drones = n_drones
 		self.rho = float(n_therm) / n ** 2 
-		self.field = np.zeros((self.n, self.n))
 		self.thermals = []
+		self.known_thermals = []
 		self.drones = []
-	
+		self.max_move = 5
+
 	def init_all(self):
 		self.init_thermals(10)
 		self.init_drones()
 
 	def init_thermals(self, H):
-		for x in range(len(self.field)):
-			for y in range(len(self.field[x])):
+		for x in range(n):
+			for y in range(n):
 				if np.random.random() < self.rho:
 					self.thermals.append(Thermal(x,y,H))
-					self.field[x][y] = 1
 				else:
-					self.field[x][y] = 0		  
+					continue
+			else:
+				continue
 
 	def init_drones(self):
 		for d in range(self.n_drones):
-			self.drones.append(Drone())
-		for drone in self.drones:
 			thermal = self.thermals[np.random.randint(0,len(self.thermals))]
-			drone.x = thermal.x
-			drone.y = thermal.y
+			self.known_thermals.append(thermal)
+			drone = Drone(thermal.x, thermal.y, self.max_move)
+			self.drones.append(drone)
 
 	def plot(self, fig):
 		plt.scatter(x, y, s=10, c="b", alpha=0.5)
@@ -64,11 +87,11 @@ class Simulation:
 
 	def move_drones(self):
 		for drone in self.drones:
-			dx = np.random.randint(0,drone.max_move_increment + 1)
-			dy = np.random.randint(0,drone.max_move_increment + 1)
+			dx = np.random.randint(0,drone.max_move + 1)
+			dy = np.random.randint(0,drone.max_move + 1)
 			if np.random.random() < np.exp(-max(dx,dy)):
-				drone.move(dx, dy) 
-				drone.boundary_conditions(self.n)
+				drone.move(dx,dy)
+				drone.boundary_conditions(n)
 
 	def loop(self):
 		fig = plt.figure(figsize=(15, 15))
@@ -99,12 +122,12 @@ class Simulation:
 			ax.set_xticks(ticks, minor=False)
 			ax.set_yticks(ticks, minor=False)
 			ax.grid(which='major', linestyle='-', linewidth='0.5', color='black')
-			plt.pause(0.01)
+			plt.pause(0.001)
 			plt.tight_layout()
 		plt.show()
 			
 n = 40	
-n_therm = 400
+n_therm = 800
 n_drones = 100
 simulation = Simulation(n, n_therm, n_drones)
 simulation.init_all()
