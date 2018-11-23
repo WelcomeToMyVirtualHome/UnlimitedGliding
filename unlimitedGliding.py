@@ -1,6 +1,8 @@
 #!bin/usr
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.animation import FuncAnimation
+import time
 
 class Drone:
 	def __init__(self,max_move):
@@ -12,10 +14,6 @@ class Drone:
 		self.x = x
 		self.y = y
 		self.max_move = max_move
-	
-	def set_pos(self, x,y):
-		self.x = x
-		self.y = y
 
 	def move(self, dx, dy, bound):
 		self.x = (self.x + dx) % bound
@@ -23,11 +21,7 @@ class Drone:
 		self.in_thermal = False
 	
 class Thermal:
-	def __init__(self, x,y):
-		self.x = x
-		self.y = y
-
-	def set_pos(self, x,y):
+	def __init__(self,x,y):
 		self.x = x
 		self.y = y
 
@@ -40,22 +34,15 @@ class Simulation:
 		self.thermals = []
 		self.known_thermals = []
 		self.drones = []
-		self.max_move = 2
+		self.max_move = 5
 
 	def init_all(self):
 		self.init_thermals()
 		self.init_drones()
 
 	def init_thermals(self):
-		for x in range(n):
-			for y in range(n):
-				if np.random.random() < self.rho:
-					self.thermals.append(Thermal(x,y))
-				else:
-					continue
-			else:
-				continue
-
+		self.thermals = [Thermal(x,y) for y in range(self.n) for x in range(self.n) if np.random.random() < self.rho]
+		
 	def init_drones(self):
 		for d in range(self.n_drones):
 			thermal = self.thermals[np.random.randint(0,len(self.thermals))]
@@ -79,7 +66,6 @@ class Simulation:
 						self.known_thermals[d].x = thermal.x
 						self.known_thermals[d].y = thermal.y
 						found = True
-						print("NEW THERMAL=[{:d},{:d}]".format(thermal.x,thermal.y))
 						break
 					else:
 						continue
@@ -87,18 +73,17 @@ class Simulation:
 					return
 				can_go = [thermal for thermal in self.known_thermals if is_in_rectangle(self.drones[d],dx,dy,self.n,thermal)]
 				thermal = can_go[np.random.randint(0,len(can_go))]
-				print("KNOWN THERMAL=[{:d},{:d}]".format(thermal.x,thermal.y))
 				self.drones[d].x = thermal.x
 				self.drones[d].y = thermal.y
 
 	def loop(self):
-		fig = plt.figure(figsize=(15, 15))
-		ax = fig.gca()
-		ticks = np.arange(0.5, self.n + 0.5, 1)
-		tick_labels = np.arange(1, self.n + 1, 1)
-		point_size = 400
+		self.fig = plt.figure(figsize=(12, 12))
+		self.point_size = 15
+		ax = self.fig.gca()
 		ax.set_xlim((0-0.5,self.n-0.5))
 		ax.set_ylim((0-0.5,self.n-0.5))
+		ticks = np.arange(0.5, self.n + 0.5, 1)
+		tick_labels = np.arange(1, self.n + 1, 1)
 		ax.set_axisbelow(True)
 		ax.set_xticks(ticks)
 		ax.set_yticks(ticks)
@@ -106,22 +91,25 @@ class Simulation:
 		ax.set_yticklabels(tick_labels)
 		ax.grid(which='major', linestyle='-', linewidth='0.5', color='black')
 		plt.tight_layout()
-		while True:	
-			x = [thermal.x for thermal in self.thermals]
-			y = [thermal.y for thermal in self.thermals]
-			thermals = ax.scatter(x,y,s=point_size,color='red')
-			x = [drone.x for drone in self.drones]
-			y = [drone.y for drone in self.drones]
-			drones = ax.scatter(x,y,s=point_size,color='black')
-			self.move_drones()
-			plt.pause(0.000001)
-			thermals.remove()
-			drones.remove()
+		self.thermals_scat, = ax.plot([],[],marker="o",markersize=self.point_size,color='red',linewidth=0)
+		self.drones_scat, = ax.plot([],[],marker="o",markersize=self.point_size,color='black',linewidth=0)
+		self.time_template = 'dt = %.4fs'
+		self.time_text = ax.text(0, 1, '', transform=ax.transAxes)
+		animation = FuncAnimation(self.fig,self.update)
 		plt.show()
+
+	def update(self,frame_number):
+		start = time.time()
+		self.thermals_scat.set_xdata([thermal.x for thermal in self.thermals])
+		self.thermals_scat.set_ydata([thermal.y for thermal in self.thermals])
+		self.drones_scat.set_xdata([drone.x for drone in self.drones])
+		self.drones_scat.set_ydata([drone.y for drone in self.drones])
+		self.move_drones()
+		self.time_text.set_text(self.time_template % (time.time() - start))
 			
 n = 40	
-n_therm = 1000
-n_drones = 200
+n_therm = 400
+n_drones = 100
 simulation = Simulation(n, n_therm, n_drones)
 simulation.init_all()
 simulation.loop()
