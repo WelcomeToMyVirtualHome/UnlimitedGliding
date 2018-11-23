@@ -1,2 +1,2 @@
 # UnlimitedGliding
-Simplified model of unlimited glidig on square lattice
+Simplified model of unlimited gliding on square lattice
