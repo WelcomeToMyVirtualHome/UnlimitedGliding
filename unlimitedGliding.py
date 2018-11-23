@@ -53,9 +53,9 @@ class Simulation:
 			if uniform[d] < np.exp(-max(dx,dy)):		
 				self.drones[d].move(dx,dy,self.n)
 				for thermal in self.thermals:
-					if self.drones[d].x == thermal.x and self.drones[d].y == thermal.x:
-						self.known_thermals[d].x = self.drones[d].x
-						self.known_thermals[d].y = self.drones[d].y
+					if self.drones[d].x == thermal.x and self.drones[d].y == thermal.y:
+						self.known_thermals[d].x = thermal.x
+						self.known_thermals[d].y = thermal.y
 						return
 					else:
 						continue
@@ -106,5 +106,3 @@ n_drones = 100
 simulation = Simulation(n, n_therm, n_drones)
 simulation.init_all()
 simulation.loop()
-
-
