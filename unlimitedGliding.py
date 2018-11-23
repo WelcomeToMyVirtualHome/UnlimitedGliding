@@ -5,11 +5,6 @@ from matplotlib.animation import FuncAnimation
 import time
 
 class Drone:
-	def __init__(self,max_move):
-		self.x = 0
-		self.y = 0
-		self.max_move = max_move
-	
 	def __init__(self,x,y,max_move):
 		self.x = x
 		self.y = y
@@ -18,7 +13,6 @@ class Drone:
 	def move(self, dx, dy, bound):
 		self.x = (self.x + dx) % bound
 		self.y = (self.y + dy) % bound
-		self.in_thermal = False
 	
 class Thermal:
 	def __init__(self,x,y):
@@ -44,12 +38,10 @@ class Simulation:
 		self.thermals = [Thermal(x,y) for y in range(self.n) for x in range(self.n) if np.random.random() < self.rho]
 		
 	def init_drones(self):
-		for d in range(self.n_drones):
-			thermal = self.thermals[np.random.randint(0,len(self.thermals))]
-			drone = Drone(thermal.x, thermal.y, self.max_move)
-			self.known_thermals.append(thermal)
-			self.drones.append(drone)
-
+		randint = np.random.randint(low=0,high=len(self.thermals),size=self.n_drones)
+		self.drones = [Drone(self.thermals[randint[d]].x, self.thermals[randint[d]].y, self.max_move) for d in range(self.n_drones)]
+		self.known_thermals = [Thermal(self.thermals[randint[d]].x, self.thermals[randint[d]].y) for d in range(self.n_drones)]
+		
 	def move_drones(self): 
 		dX = np.random.randint(low=0, high=self.max_move + 1,size=self.n_drones)
 		dY = np.random.randint(low=0, high=self.max_move + 1,size=self.n_drones)
@@ -60,25 +52,23 @@ class Simulation:
 			dy = dY[d]
 			if uniform[d] < np.exp(-max(dx,dy)):		
 				self.drones[d].move(dx,dy,self.n)
-				found = False
 				for thermal in self.thermals:
 					if self.drones[d].x == thermal.x and self.drones[d].y == thermal.x:
-						self.known_thermals[d].x = thermal.x
-						self.known_thermals[d].y = thermal.y
-						found = True
-						break
+						self.known_thermals[d].x = self.drones[d].x
+						self.known_thermals[d].y = self.drones[d].y
+						return
 					else:
 						continue
-				if found:
-					return
 				can_go = [thermal for thermal in self.known_thermals if is_in_rectangle(self.drones[d],dx,dy,self.n,thermal)]
 				thermal = can_go[np.random.randint(0,len(can_go))]
 				self.drones[d].x = thermal.x
 				self.drones[d].y = thermal.y
+				self.known_thermals[d].x = self.drones[d].x
+				self.known_thermals[d].y = self.drones[d].y		
 
 	def loop(self):
 		self.fig = plt.figure(figsize=(12, 12))
-		self.point_size = 15
+		self.point_size = 20
 		ax = self.fig.gca()
 		ax.set_xlim((0-0.5,self.n-0.5))
 		ax.set_ylim((0-0.5,self.n-0.5))
@@ -91,8 +81,9 @@ class Simulation:
 		ax.set_yticklabels(tick_labels)
 		ax.grid(which='major', linestyle='-', linewidth='0.5', color='black')
 		plt.tight_layout()
-		self.thermals_scat, = ax.plot([],[],marker="o",markersize=self.point_size,color='red',linewidth=0)
-		self.drones_scat, = ax.plot([],[],marker="o",markersize=self.point_size,color='black',linewidth=0)
+		self.thermals_scat, = ax.plot([],[],marker="s",markersize=self.point_size,color='red',linewidth=0)
+		self.known_thermals_scat, = ax.plot([],[],marker="s",markersize=self.point_size - 5,color='blue',linewidth=0)
+		self.drones_scat, = ax.plot([],[],marker="o",markersize=self.point_size - 10,color='black',linewidth=0)
 		self.time_template = 'dt = %.4fs'
 		self.time_text = ax.text(0, 1, '', transform=ax.transAxes)
 		animation = FuncAnimation(self.fig,self.update)
@@ -100,10 +91,12 @@ class Simulation:
 
 	def update(self,frame_number):
 		start = time.time()
-		self.thermals_scat.set_xdata([thermal.x for thermal in self.thermals])
-		self.thermals_scat.set_ydata([thermal.y for thermal in self.thermals])
-		self.drones_scat.set_xdata([drone.x for drone in self.drones])
-		self.drones_scat.set_ydata([drone.y for drone in self.drones])
+		self.thermals_scat.set_xdata([obj.x for obj in self.thermals])
+		self.thermals_scat.set_ydata([obj.y for obj in self.thermals])
+		self.known_thermals_scat.set_xdata([obj.x for obj in self.known_thermals])
+		self.known_thermals_scat.set_ydata([obj.y for obj in self.known_thermals])
+		self.drones_scat.set_xdata([obj.x for obj in self.drones])
+		self.drones_scat.set_ydata([obj.y for obj in self.drones])
 		self.move_drones()
 		self.time_text.set_text(self.time_template % (time.time() - start))
 			
