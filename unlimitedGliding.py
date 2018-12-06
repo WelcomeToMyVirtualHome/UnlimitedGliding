@@ -86,11 +86,11 @@ class Simulation:
 		self.drones_scat, = ax.plot([],[],marker="o",markersize=self.point_size - 10,color='black',linewidth=0)
 		self.time_template = 'dt = %.4fs'
 		self.time_text = ax.text(0, 1, '', transform=ax.transAxes)
+		self.start = time.time()
 		animation = FuncAnimation(self.fig,self.update)
 		plt.show()
 
 	def update(self,frame_number):
-		start = time.time()
 		self.thermals_scat.set_xdata([obj.x for obj in self.thermals])
 		self.thermals_scat.set_ydata([obj.y for obj in self.thermals])
 		self.known_thermals_scat.set_xdata([obj.x for obj in self.known_thermals])
@@ -98,7 +98,7 @@ class Simulation:
 		self.drones_scat.set_xdata([obj.x for obj in self.drones])
 		self.drones_scat.set_ydata([obj.y for obj in self.drones])
 		self.move_drones()
-		self.time_text.set_text(self.time_template % (time.time() - start))
+		self.time_text.set_text(self.time_template % (time.time() - self.start))
 			
 n = 40	
 n_therm = 400
