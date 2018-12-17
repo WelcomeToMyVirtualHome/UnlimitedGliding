@@ -48,23 +48,20 @@ class Simulation:
 		uniform = np.random.random(size=self.n_drones)
 		is_in_rectangle = lambda drone, dx, dy, bound, thermal: (((drone.x + dx) % bound) >= thermal.x or ((drone.x - dx) % bound) <= thermal.x) and (((drone.y + dy) % bound) >= thermal.y or ((drone.y - dy) % bound) <= thermal.y)	
 		for d in range(self.n_drones):
-			dx = dX[d]
-			dy = dY[d]
-			if uniform[d] < np.exp(-max(dx,dy)):		
-				self.drones[d].move(dx,dy,self.n)
+			if uniform[d] < np.exp(-max(dX[d],dY[d])):		
+				self.drones[d].move(dX[d],dY[d],self.n)
 				for thermal in self.thermals:
 					if self.drones[d].x == thermal.x and self.drones[d].y == thermal.y:
 						self.known_thermals[d].x = thermal.x
 						self.known_thermals[d].y = thermal.y
-						return
-					else:
-						continue
-				can_go = [thermal for thermal in self.known_thermals if is_in_rectangle(self.drones[d],dx,dy,self.n,thermal)]
-				thermal = can_go[np.random.randint(0,len(can_go))]
-				self.drones[d].x = thermal.x
-				self.drones[d].y = thermal.y
-				self.known_thermals[d].x = self.drones[d].x
-				self.known_thermals[d].y = self.drones[d].y		
+						break
+				else:
+					can_go = [thermal for thermal in self.known_thermals if is_in_rectangle(self.drones[d],dX[d],dY[d],self.n,thermal)]
+					thermal = can_go[np.random.randint(0,len(can_go))]
+					self.drones[d].x = thermal.x
+					self.drones[d].y = thermal.y		
+					self.known_thermals[d].x = thermal.x
+					self.known_thermals[d].y = thermal.y
 
 	def loop(self):
 		self.fig = plt.figure(figsize=(12, 12))
@@ -84,7 +81,7 @@ class Simulation:
 		self.thermals_scat, = ax.plot([],[],marker="s",markersize=self.point_size,color='red',linewidth=0)
 		self.known_thermals_scat, = ax.plot([],[],marker="s",markersize=self.point_size - 5,color='blue',linewidth=0)
 		self.drones_scat, = ax.plot([],[],marker="o",markersize=self.point_size - 10,color='black',linewidth=0)
-		self.time_template = 'dt = %.4fs'
+		self.time_template = 't = %.4fs'
 		self.time_text = ax.text(0, 1, '', transform=ax.transAxes)
 		self.start = time.time()
 		animation = FuncAnimation(self.fig,self.update)
