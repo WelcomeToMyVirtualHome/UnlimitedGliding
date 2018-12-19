@@ -29,21 +29,10 @@ class Simulation:
 		self.drones = np.asarray(self.drones)
 		self.known_thermals = self.drones
 
-	def search_termal(pos,known_thermals,dy,dx):
-		found = []
-		for y in range(-dy,dy):
-			for x in range(-dx,dx):
-				pos_y = (pos[0]+dy)%self.n
-				pos_x = (pos[1]+dx)%self.n
-				if known_thermals[pos_y,pos_x] == (255,0,0,255):
-					found.append([pos_y,pos_x])
-		return found
-
 	def move_drones(self): 
 		dX = np.random.randint(low=0, high=self.max_move + 1,size=self.n_drones)
 		dY = np.random.randint(low=0, high=self.max_move + 1,size=self.n_drones)
 		uniform = np.random.random(size=self.n_drones)
-		is_in_rectangle = lambda drone, dx, dy, bound, thermal: (((drone[1] + dx) % bound) >= thermal[1] or ((drone[1] - dx) % bound) <= thermal[1]) and (((drone[0] + dy) % bound) >= thermal[0] or ((drone[0] - dy) % bound) <= thermal[0])	
 		for d in range(self.n_drones):
 			if uniform[d] < np.exp(-max(dX[d],dY[d])):		
 				self.drones[d][0] = (self.drones[d][0] + dY[d]) % self.n
