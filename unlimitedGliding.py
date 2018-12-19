@@ -50,8 +50,8 @@ class Simulation:
 				self.drones[d][1] = (drone[1] + dX[d]) % self.n
 				for thermal in self.thermals:
 					if drone[1] == thermal[1] and drone[0] == thermal[0]:
-						self.known_thermals[d][1] = thermal[0]
 						self.known_thermals[d][1] = thermal[1]
+						self.known_thermals[d][0] = thermal[0]
 						break
 				else:
 					can_go = [thermal for thermal in self.known_thermals if is_in_rectangle(drone,dX[d],dY[d],self.n,thermal)]
@@ -73,7 +73,7 @@ class Simulation:
 		self.base_img[:,:,3] = 255
 		self.base_img[tuple(self.thermals.T)] = (255,0,0,255)
 		base = plt.imshow(self.base_img,animated=True)
-		
+			
 		self.im = plt.imshow(self.base_img,animated=True)
 
 		_ = FuncAnimation(fig, self.update, interval=0, blit=True)
