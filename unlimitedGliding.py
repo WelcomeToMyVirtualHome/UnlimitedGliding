@@ -4,21 +4,6 @@ import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
 import time
 
-class Drone:
-	def __init__(self,x,y,max_move):
-		self.x = x
-		self.y = y
-		self.max_move = max_move
-
-	def move(self, dx, dy, bound):
-		self.x = (self.x + dx) % bound
-		self.y = (self.y + dy) % bound
-	
-class Thermal:
-	def __init__(self,x,y):
-		self.x = x
-		self.y = y
-
 class Simulation:
 	def __init__(self, n, n_therm, n_drones):
 		self.n = n
@@ -35,71 +20,79 @@ class Simulation:
 		self.init_drones()
 
 	def init_thermals(self):
-		self.thermals = [Thermal(x,y) for y in range(self.n) for x in range(self.n) if np.random.random() < self.rho]
+		self.thermals = [[y,x] for y in range(self.n) for x in range(self.n) if np.random.random() < self.rho]
+		self.thermals = np.asarray(self.thermals)
 		
 	def init_drones(self):
 		randint = np.random.randint(low=0,high=len(self.thermals),size=self.n_drones)
-		self.drones = [Drone(self.thermals[randint[d]].x, self.thermals[randint[d]].y, self.max_move) for d in range(self.n_drones)]
-		self.known_thermals = [Thermal(self.thermals[randint[d]].x, self.thermals[randint[d]].y) for d in range(self.n_drones)]
-		
+		self.drones = [[self.thermals[randint[d]][0], self.thermals[randint[d]][1]] for d in range(self.n_drones)]
+		self.drones = np.asarray(self.drones)
+		self.known_thermals = self.drones
+
+	def search_termal(pos,known_thermals,dy,dx):
+		found = []
+		for y in range(-dy,dy):
+			for x in range(-dx,dx):
+				pos_y = (pos[0]+dy)%self.n
+				pos_x = (pos[1]+dx)%self.n
+				if known_thermals[pos_y,pos_x] == (255,0,0,255):
+					found.append([pos_y,pos_x])
+		return found
+
 	def move_drones(self): 
 		dX = np.random.randint(low=0, high=self.max_move + 1,size=self.n_drones)
 		dY = np.random.randint(low=0, high=self.max_move + 1,size=self.n_drones)
 		uniform = np.random.random(size=self.n_drones)
-		is_in_rectangle = lambda drone, dx, dy, bound, thermal: (((drone.x + dx) % bound) >= thermal.x or ((drone.x - dx) % bound) <= thermal.x) and (((drone.y + dy) % bound) >= thermal.y or ((drone.y - dy) % bound) <= thermal.y)	
-		for d in range(self.n_drones):
+		is_in_rectangle = lambda drone, dx, dy, bound, thermal: (((drone[1] + dx) % bound) >= thermal[1] or ((drone[1] - dx) % bound) <= thermal[1]) and (((drone[0] + dy) % bound) >= thermal[0] or ((drone[0] - dy) % bound) <= thermal[0])	
+		for d,drone in enumerate(self.drones):
 			if uniform[d] < np.exp(-max(dX[d],dY[d])):		
-				self.drones[d].move(dX[d],dY[d],self.n)
+				self.drones[d][0] = (drone[0] + dY[d]) % self.n
+				self.drones[d][1] = (drone[1] + dX[d]) % self.n
 				for thermal in self.thermals:
-					if self.drones[d].x == thermal.x and self.drones[d].y == thermal.y:
-						self.known_thermals[d].x = thermal.x
-						self.known_thermals[d].y = thermal.y
+					if drone[1] == thermal[1] and drone[0] == thermal[0]:
+						self.known_thermals[d][1] = thermal[0]
+						self.known_thermals[d][1] = thermal[1]
 						break
 				else:
-					can_go = [thermal for thermal in self.known_thermals if is_in_rectangle(self.drones[d],dX[d],dY[d],self.n,thermal)]
+					can_go = [thermal for thermal in self.known_thermals if is_in_rectangle(drone,dX[d],dY[d],self.n,thermal)]
 					thermal = can_go[np.random.randint(0,len(can_go))]
-					self.drones[d].x = thermal.x
-					self.drones[d].y = thermal.y		
-					self.known_thermals[d].x = thermal.x
-					self.known_thermals[d].y = thermal.y
-
+					self.drones[d][1] = thermal[1]
+					self.drones[d][0] = thermal[0]		
+					self.known_thermals[d][1] = thermal[1]
+					self.known_thermals[d][0] = thermal[0]
+	
 	def loop(self):
-		self.fig = plt.figure(figsize=(12, 12))
-		self.point_size = 20
-		ax = self.fig.gca()
-		ax.set_xlim((0-0.5,self.n-0.5))
-		ax.set_ylim((0-0.5,self.n-0.5))
-		ticks = np.arange(0.5, self.n + 0.5, 1)
-		tick_labels = np.arange(1, self.n + 1, 1)
-		ax.set_axisbelow(True)
-		ax.set_xticks(ticks)
-		ax.set_yticks(ticks)
-		ax.set_xticklabels(tick_labels)
-		ax.set_yticklabels(tick_labels)
-		ax.grid(which='major', linestyle='-', linewidth='0.5', color='black')
+		fig = plt.figure(figsize=(12, 12))
+		ax = fig.gca()
 		plt.tight_layout()
-		self.thermals_scat, = ax.plot([],[],marker="s",markersize=self.point_size,color='red',linewidth=0)
-		self.known_thermals_scat, = ax.plot([],[],marker="s",markersize=self.point_size - 5,color='blue',linewidth=0)
-		self.drones_scat, = ax.plot([],[],marker="o",markersize=self.point_size - 10,color='black',linewidth=0)
-		self.time_template = 't = %.4fs'
-		self.time_text = ax.text(0, 1, '', transform=ax.transAxes)
-		self.start = time.time()
-		animation = FuncAnimation(self.fig,self.update)
-		plt.show()
+		
+		self.time_text = ax.text(0, 0, '', transform=ax.transAxes, color='w')
+		self.iterate = 0
+		
+		self.base_img = np.zeros((self.n,self.n,4),dtype=np.uint8)
+		self.base_img[:,:,3] = 255
+		self.base_img[tuple(self.thermals.T)] = (255,0,0,255)
+		base = plt.imshow(self.base_img,animated=True)
+		
+		self.im = plt.imshow(self.base_img,animated=True)
 
-	def update(self,frame_number):
-		self.thermals_scat.set_xdata([obj.x for obj in self.thermals])
-		self.thermals_scat.set_ydata([obj.y for obj in self.thermals])
-		self.known_thermals_scat.set_xdata([obj.x for obj in self.known_thermals])
-		self.known_thermals_scat.set_ydata([obj.y for obj in self.known_thermals])
-		self.drones_scat.set_xdata([obj.x for obj in self.drones])
-		self.drones_scat.set_ydata([obj.y for obj in self.drones])
-		self.move_drones()
-		self.time_text.set_text(self.time_template % (time.time() - self.start))
+		_ = FuncAnimation(fig, self.update, interval=0, blit=True)
+		plt.show()
 			
-n = 40	
-n_therm = 400
-n_drones = 100
-simulation = Simulation(n, n_therm, n_drones)
-simulation.init_all()
-simulation.loop()
+	def update(self,frame_number):
+		mask = np.zeros(self.base_img.shape,dtype=np.uint8)
+		mask[tuple(self.drones.T)] = (0,0,255,255)
+		mask = self.base_img + mask
+		self.im.set_data(mask)
+		self.move_drones()
+		self.iterate = self.iterate + 1
+		self.time_text.set_text("{:d}".format(self.iterate))
+		return [self.im, self.time_text]
+	
+if __name__ == '__main__':
+	n = 40	
+	n_therm = 400
+	n_drones = 100
+	simulation = Simulation(n, n_therm, n_drones)
+	simulation.init_all()
+	simulation.loop()
