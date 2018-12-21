@@ -18,6 +18,7 @@ public:
 class Rect
 {
 public:
+	Rect() {}
 	Rect(float n_x1, float n_y1, float n_x2, float n_y2) : x1(n_x1), y1(n_y1), x2(n_x2), y2(n_y2) { }
 	float x1,y1,x2,y2;
 };

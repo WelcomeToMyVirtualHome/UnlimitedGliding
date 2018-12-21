@@ -8,66 +8,52 @@
 #include <vector>
 #include "structs.h"
 
+
 const int width = 1000;
 const int height = 1000;
 int reftime = 10,frame=0,c_time=0,timebase=0;
-static char* format_FPS = "FPS=%4.2f";
-
-const size_t size = 100;
-const size_t n_thermals = 2500;
-const size_t n_drones = 625;
+static const char* format_FPS = "FPS=%4.2f";
+size_t size = 40;
+size_t n_thermals = 400;
+size_t n_drones = 100;
 const float rho_thermals = n_thermals * std::pow(size,-2);
 const int max_move = 5;
 
 const Color thermal_color = Color(1.,0.,0.);
 const Color drone_color = Color(1.,1.,1.);
-std::vector<std::vector<Rect> > lattice;
+Rect **lattice;
 std::vector<Cell> drones;
 std::vector<Cell> thermals_list;
-std::vector<Cell> known_thermals_list;
 std::pair<bool,int> **thermals;
 
 void Init()
 {
+	srand48(time(NULL));
 	float rect_size = 1./size;
-	lattice.reserve(size);
+	lattice = new Rect*[size];
 	thermals = new std::pair<bool,int>*[size];
-	for(size_t y = 0; y < size; y++)
+	for(size_t x = 0; x < size; x++)
 	{
-		lattice.push_back(std::vector<Rect>());
-		lattice[y].reserve(size);
-		thermals[y] = new std::pair<bool,int>[size];
-		for(size_t x = 0; x < size; x++)
+		lattice[x] = new Rect[size];
+		thermals[x] = new std::pair<bool,int>[size];
+		for(size_t y = 0; y < size; y++)
 		{
-			float x1 = 2*float(x)/size - 1.;
-			float y1 = 2*float(y)/size - 1.;
-			float x2 = 2*float(x)/size - 1. + 2*rect_size; 
-			float y2 = 2*float(y)/size - 1. + 2*rect_size;
-			lattice[y].push_back(Rect(x1,y1,x2,y2));
-			thermals[y][x] = std::pair<bool,int>(false,0);
-		}
-	}
-	for(size_t y = 0; y < size; y++)
-	{
-		for(size_t x = 0; x < size; x++)
-		{
+			lattice[x][y] = Rect(2*float(x)/size - 1.,2*float(y)/size - 1.,2*float(x)/size - 1. + 2*rect_size,2*float(y)/size - 1. + 2*rect_size);
+			thermals[x][y] = std::pair<bool,int>(false,0);
 			if(drand48() < rho_thermals)
 			{
 				thermals_list.push_back(Cell(x,y));
 				thermals[x][y].first = true;
-				thermals[x][y].second++;
 			}
 		}
 	}
 	drones.reserve(n_drones);
-	known_thermals_list.reserve(n_drones);
 	for(size_t i = 0; i < n_drones; i++)
 	{
 		Cell thermal = thermals_list[std::floor(drand48()*(thermals_list.size()-1))];
 		drones.push_back(thermal);
-		known_thermals_list.push_back(thermal);
-		thermals[thermal.x][thermal.y].second++;
-	}			
+		thermals[thermal.x][thermal.y].second++;		
+	}		
 }
 
 inline int mod(int x, int divisor)
@@ -78,24 +64,18 @@ inline int mod(int x, int divisor)
 
 void moveDrones()
 {
-	int i = 0;
 	for(auto &d : drones)
 	{
 		int dx = std::floor(drand48()*(max_move+1));
 		int dy = std::floor(drand48()*(max_move+1));
-		if(drand48() > std::exp(-std::max(dx,dy)))
+		if(drand48() > std::exp(-std::max(dx,dy)/2))
 			continue;
 		
 		int old_x = d.x;
 		int old_y = d.y;
 		d.x = mod(d.x + dx,size);
 		d.y = mod(d.y + dy,size);
-		if(thermals[d.x][d.y].first)
-		{
-			known_thermals_list[i].x = d.x;
-			known_thermals_list[i].y = d.y;
-		}
-		else
+		if(!thermals[d.x][d.y].first)
 		{
 			std::vector<std::pair<int,int> > can_go;
 			can_go.reserve(max_move*max_move);
@@ -106,22 +86,15 @@ void moveDrones()
 					int n_x = mod(d.x + x,size);
 					int n_y = mod(d.y + y,size);
 					if(thermals[n_x][n_y].second > 0)
-					{
 						can_go.push_back(std::pair<int,int>(n_x,n_y));
-					}
 				}
 			}
-			if(can_go.size() == 0)
-				std::cout << "wtf\n";
-			int go = int(drand48()*(can_go.size()-1));
+			int go = std::floor(drand48()*(can_go.size()));
 			d.x = can_go[go].first;
 			d.y = can_go[go].second;
-			known_thermals_list[i].x = d.x;
-			known_thermals_list[i].y = d.y;
 		}
-		i++;
-		thermals[d.x][d.y].second++; 	
 		thermals[old_x][old_y].second--;	
+		thermals[d.x][d.y].second++; 	
 	}
 }
 
@@ -133,10 +106,10 @@ void setup()
 void print(double x, double y, char *string)
 {
 	glPushAttrib(GL_CURRENT_BIT);
-	glColor3f(1,1,1);
+	glColor3f(1.,1.,1.);
 	glRasterPos2f(x,y);
 	for (size_t i = 0; i < strlen(string); i++) 
-		glutBitmapCharacter(GLUT_BITMAP_TIMES_ROMAN_24,string[i]);
+		glutBitmapCharacter(GLUT_BITMAP_TIMES_ROMAN_10,string[i]);
 	glPopAttrib();
 }
 
@@ -181,6 +154,17 @@ void Timer(int iUnused)
 
 int main(int argc, char *argv[])
 {
+	if(argc == 4)
+	{
+		size = atoi(argv[1]);
+		n_drones = atoi(argv[2]);
+		n_thermals = atoi(argv[3]);
+	}
+	if (argc<4)
+	{
+		std::cout<<"usage: <lattice size> <number of drones> <number of thermals>"<<'\n';	
+		std::cout<<"running with default: 40, 100, 400"<<"\n";
+	}
 	glutInit(&argc, argv);
 	glutInitDisplayMode(GLUT_RGB | GLUT_DEPTH | GLUT_DOUBLE);
 	glutInitWindowSize(width,height);
