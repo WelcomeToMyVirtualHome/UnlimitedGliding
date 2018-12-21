@@ -27,6 +27,7 @@ std::pair<bool,int> **thermals;
 
 void Init()
 {
+	rho_thermals = n_thermals * std::pow(size,-2);
 	srand48(time(NULL));
 	float rect_size = 1./size;
 	lattice = new Rect*[size];
@@ -78,11 +79,9 @@ void moveDrones()
 		{
 			std::vector<std::pair<int,int> > can_go;
 			can_go.reserve(max_move*max_move);
-			dx = max_move;
-			dy = max_move;
 			for(int x = -dx; x <= dx; x++)
 			{
-				for(int y =	 -dy; y <= dy; y++)
+				for(int y =	-dy; y <= dy; y++)
 				{
 					int n_x = mod(d.x + x,size);
 					int n_y = mod(d.y + y,size);
