@@ -8,15 +8,14 @@
 #include <vector>
 #include "structs.h"
 
-
 const int width = 1000;
 const int height = 1000;
-int reftime = 10,frame=0,c_time=0,timebase=0;
-static const char* format_FPS = "FPS=%4.2f";
+int reftime = 0,frame=0,c_time=0,timebase=0;
+const char* format_FPS = "FPS=%4.2f";
 size_t size = 40;
 size_t n_thermals = 400;
 size_t n_drones = 100;
-const float rho_thermals = n_thermals * std::pow(size,-2);
+float rho_thermals = n_thermals * std::pow(size,-2);
 const int max_move = 5;
 
 const Color thermal_color = Color(1.,0.,0.);
@@ -79,9 +78,11 @@ void moveDrones()
 		{
 			std::vector<std::pair<int,int> > can_go;
 			can_go.reserve(max_move*max_move);
+			dx = max_move;
+			dy = max_move;
 			for(int x = -dx; x <= dx; x++)
 			{
-				for(int y = -dy; y <= dy; y++)
+				for(int y =	 -dy; y <= dy; y++)
 				{
 					int n_x = mod(d.x + x,size);
 					int n_y = mod(d.y + y,size);
@@ -143,6 +144,7 @@ void display(void) {
 		frame = 0;
 	}
     print(-1,-1,buffer);
+
 	glutSwapBuffers();
 }
 
@@ -150,6 +152,23 @@ void Timer(int iUnused)
 {
 	glutPostRedisplay();
 	glutTimerFunc(reftime, Timer, 0);
+}
+
+void keyboard(int key, int x, int y)
+{
+	switch(key)
+	{
+  		case GLUT_KEY_UP:
+  			reftime += 1;
+			break;
+      	case GLUT_KEY_DOWN:
+			if(reftime == 0)
+				break;
+			reftime -= 1;
+			break;
+		default: 
+			break;
+	}
 }
 
 int main(int argc, char *argv[])
@@ -173,6 +192,7 @@ int main(int argc, char *argv[])
 
 	setup();
 	glutDisplayFunc(display);
+	glutSpecialFunc(keyboard);
 	Timer(0);
     
 	glutMainLoop();
