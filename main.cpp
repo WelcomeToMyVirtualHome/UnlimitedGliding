@@ -16,7 +16,7 @@ size_t size = 40;
 size_t n_thermals = 400;
 size_t n_drones = 100;
 float rho_thermals = n_thermals * std::pow(size,-2);
-const int max_move = 5;
+const int max_range = 10;
 
 const Color thermal_color = Color(1.,0.,0.);
 const Color drone_color = Color(1.,1.,1.);
@@ -66,9 +66,9 @@ void moveDrones()
 {
 	for(auto &d : drones)
 	{
-		int dx = std::floor(drand48()*(max_move+1));
-		int dy = std::floor(drand48()*(max_move+1));
-		if(drand48() > std::exp(-std::max(dx,dy)/2))
+		int dx = std::floor(drand48()*(max_range/2+1));
+		int dy = std::floor(drand48()*(max_range/2+1));
+		if(drand48() > std::exp(-std::max(dx,dy)))
 			continue;
 		
 		int old_x = d.x;
@@ -78,10 +78,10 @@ void moveDrones()
 		if(!thermals[d.x][d.y].first)
 		{
 			std::vector<std::pair<int,int> > can_go;
-			can_go.reserve(max_move*max_move);
-			for(int x = -dx; x <= dx; x++)
+			can_go.reserve(max_range*max_range);
+			for(int x = -max_range + dx; x <= max_range - dx; x++)
 			{
-				for(int y =	-dy; y <= dy; y++)
+				for(int y =	-max_range + dy; y <= max_range - dy; y++)
 				{
 					int n_x = mod(d.x + x,size);
 					int n_y = mod(d.y + y,size);
