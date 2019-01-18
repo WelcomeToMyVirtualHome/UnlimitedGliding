@@ -1,17 +1,20 @@
 #include <GL/glut.h>
 #include <cmath>
 #include <iostream>
-#include <fstream>
 #include <cstdlib>
 #include <ctime>
 #include <cstring>
+#include <cstdio>
 #include <vector>
+#include <numeric>
 #include "structs.h"
 
 const int width = 1000;
 const int height = 1000;
-int reftime = 0,frame=0,c_time=0,timebase=0;
-const char* format_FPS = "FPS=%4.2f";
+int reftime = 0,frame=0,c_time=0,timebase=0,simulations_count = 0;
+unsigned long long frame_long = 0;
+const unsigned long long frames_threshold = 1000, frames_reinit = 2000;
+const char* format_FPS = "FPS=%4.2f, frame=%u";
 size_t size = 40;
 size_t n_thermals = 400;
 size_t n_drones = 100;
@@ -25,10 +28,17 @@ std::vector<Cell> drones;
 std::vector<Cell> thermals_list;
 std::pair<bool,int> **thermals;
 
-void Init()
+std::vector<int> velocityX;
+std::vector<int> velocityY;
+float averageVX = 0, averageVY = 0;
+
+FILE *outputVelocity;
+int windowId;	
+
+void init()
 {
-	rho_thermals = n_thermals * std::pow(size,-2);
 	srand48(time(NULL));
+	rho_thermals = n_thermals * std::pow(size,-2);
 	float rect_size = 1./size;
 	lattice = new Rect*[size];
 	thermals = new std::pair<bool,int>*[size];
@@ -40,6 +50,28 @@ void Init()
 		{
 			lattice[x][y] = Rect(2*float(x)/size - 1.,2*float(y)/size - 1.,2*float(x)/size - 1. + 2*rect_size,2*float(y)/size - 1. + 2*rect_size);
 			thermals[x][y] = std::pair<bool,int>(false,0);
+		}
+	}
+	velocityX.resize(n_drones);	
+	velocityY.resize(n_drones);	
+	outputVelocity = fopen("optputVelocity.dat","w+");
+}
+
+void initSimulation()
+{
+	for(size_t x = 0; x < size; x++)
+	{
+		for(size_t y = 0; y < size; y++)
+		{
+			thermals[x][y].first = false;
+			thermals[x][y].second = 0;
+		}
+	}
+	thermals_list.clear();
+	for(size_t x = 0; x < size; x++)
+	{
+		for(size_t y = 0; y < size; y++)
+		{
 			if(drand48() < rho_thermals)
 			{
 				thermals_list.push_back(Cell(x,y));
@@ -47,13 +79,14 @@ void Init()
 			}
 		}
 	}
-	drones.reserve(n_drones);
+	
+	drones.resize(n_drones);
 	for(size_t i = 0; i < n_drones; i++)
 	{
 		Cell thermal = thermals_list[std::floor(drand48()*(thermals_list.size()-1))];
-		drones.push_back(thermal);
+		drones[i] = thermal;
 		thermals[thermal.x][thermal.y].second++;		
-	}		
+	}
 }
 
 inline int mod(int x, int divisor)
@@ -62,8 +95,21 @@ inline int mod(int x, int divisor)
     return m + (m < 0 ? divisor : 0);
 }
 
-void moveDrones()
+inline int mod_diff(int newX, int oldX)
 {
+	int diff = newX - oldX;
+	if(std::abs(diff) > int(float(size)/2))
+	{
+		diff = size - std::abs(diff);
+		newX > oldX ? diff *= -1 : diff *= 1; 
+	}
+	return diff;
+} 
+
+void moveDrones(bool interaction = true)
+{
+	std::vector<Cell> dronesCopy(drones);
+	int i = 0;
 	for(auto &d : drones)
 	{
 		int dx = std::floor(drand48()*(max_range/2+1));
@@ -77,24 +123,55 @@ void moveDrones()
 		d.y = mod(d.y + dy,size);
 		if(!thermals[d.x][d.y].first)
 		{
-			std::vector<std::pair<int,int> > can_go;
-			can_go.reserve(max_range*max_range);
-			for(int x = -max_range + dx; x <= max_range - dx; x++)
+			if(interaction)
 			{
-				for(int y =	-max_range + dy; y <= max_range - dy; y++)
+				std::vector<std::pair<int,int> > can_go;
+				can_go.reserve(max_range*max_range);
+				for(int x = -max_range + dx; x <= max_range - dx; x++)
 				{
-					int n_x = mod(d.x + x,size);
-					int n_y = mod(d.y + y,size);
-					if(thermals[n_x][n_y].second > 0)
-						can_go.push_back(std::pair<int,int>(n_x,n_y));
+					for(int y =	-max_range + dy; y <= max_range - dy; y++)
+					{
+						int n_x = mod(d.x + x,size);
+						int n_y = mod(d.y + y,size);
+						if(thermals[n_x][n_y].second > 0)
+							can_go.push_back(std::pair<int,int>(n_x,n_y));
+					}
 				}
+				int go = std::floor(drand48()*(can_go.size()));
+				d.x = can_go[go].first;
+				d.y = can_go[go].second;
 			}
-			int go = std::floor(drand48()*(can_go.size()));
-			d.x = can_go[go].first;
-			d.y = can_go[go].second;
+			else
+			{
+				d.x = old_x;
+				d.y = old_y;
+			}
 		}
 		thermals[old_x][old_y].second--;	
-		thermals[d.x][d.y].second++; 	
+		thermals[d.x][d.y].second++; 
+		
+		velocityX[i] = mod_diff(d.x,old_x);
+		velocityY[i] = mod_diff(d.y,old_y);
+		i++;
+	}
+}
+
+void measure()
+{
+	if(frame_long >= frames_threshold)
+	{
+		averageVX += float(std::accumulate(velocityX.begin(), velocityX.end(), 0))/n_drones;
+		averageVY += float(std::accumulate(velocityY.begin(), velocityY.end(), 0))/n_drones;
+	}
+	if(frame_long >= frames_reinit)
+	{
+		simulations_count++;
+		printf("i=%d, avgX=%.2f, avgY=%.2f\n", simulations_count, averageVX/frame_long, averageVY/frame_long);
+		fprintf(outputVelocity, "%d %f %f\n", simulations_count, averageVX/frame_long, averageVY/frame_long);
+		averageVY = 0;
+		averageVX = 0;
+		frame_long = 0;
+		initSimulation();
 	}
 }
 
@@ -131,12 +208,14 @@ void display(void) {
   		glRectf(lattice[x][y].x1,lattice[x][y].y1,lattice[x][y].x2,lattice[x][y].y2);			
 	}
 
-	moveDrones();
-	
+	moveDrones(true);
+	measure();
+
 	frame++;
+	frame_long++;
 	c_time = glutGet(GLUT_ELAPSED_TIME);
 	char buffer[50];
-	sprintf(buffer,format_FPS,frame*1000.0/(c_time-timebase));
+	sprintf(buffer,format_FPS,frame*1000.0/(c_time-timebase),frame_long);
 	if (c_time - timebase > 1000) 
 	{
 		timebase = c_time;
@@ -170,6 +249,19 @@ void keyboard(int key, int x, int y)
 	}
 }
 
+void keyboardCB(unsigned char key, int x, int y)
+{
+	switch(key)
+	{
+		case 27:
+			fclose(outputVelocity);
+			glutDestroyWindow(windowId);
+			exit (0);
+			break;
+	}
+	glutPostRedisplay();
+}
+
 int main(int argc, char *argv[])
 {
 	if(argc == 4)
@@ -186,12 +278,13 @@ int main(int argc, char *argv[])
 	glutInit(&argc, argv);
 	glutInitDisplayMode(GLUT_RGB | GLUT_DEPTH | GLUT_DOUBLE);
 	glutInitWindowSize(width,height);
-	glutCreateWindow("Unlimited Gliding");
-	Init();
-
+	windowId = glutCreateWindow("Unlimited Gliding");
+	init();
+	initSimulation();
 	setup();
 	glutDisplayFunc(display);
 	glutSpecialFunc(keyboard);
+	glutKeyboardFunc(keyboardCB);
 	Timer(0);
     
 	glutMainLoop();

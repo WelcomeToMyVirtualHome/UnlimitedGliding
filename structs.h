@@ -10,6 +10,7 @@ public:
 class Cell
 {
 public:
+	Cell() {}
 	Cell(size_t n_x, size_t n_y) : x(n_x), y(n_y) {}
 	size_t x,y;
 };
