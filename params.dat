@@ -1,0 +1,12 @@
+single simulation =n
+visualize =y
+interaction =y
+write to file =n
+lattice size =100
+number of drones =100
+initial rho thermals =0.5
+max rho thermals =0.6
+n measurments =3
+average over n simulations =1
+simulation threshold =40000
+simulation length =10000
