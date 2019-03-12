@@ -8,7 +8,7 @@
 #include <vector>
 #include <csignal>	
 #include <fstream>
-#include "structs.h"
+#include "objects.h"
 #include "utils.h"
 
 const int width = 1000;
@@ -19,68 +19,61 @@ const std::string NO = "n";
 const std::string READFILE = "f";
 const char* FILENAME = "params.dat";
 
-int reftime = 0,frame=0,c_time=0,timebase=0;
+int reftime = 0,frame = 0, c_time = 0, timebase = 0;
 
 unsigned long long frame_long = 0, simulation_threshold = 5000, simulation_length = 1000;
 int simulations_count = 0, average_count = 1;
 
-size_t size = 40;
-size_t n_thermals = 400;
-size_t n_drones = 100;
-size_t n_measurments = 1;
-float rho_thermals = n_thermals * std::pow(size,-2);
-float increment_rho_thermals = 0.1;
-float max_rho_thermals = 1.;
-float curr_rho_thernals = 0.;
+size_t size = 40, n_thermals = 400, n_drones = 100, n_measurments = 1;
+float rho_thermals = n_thermals * std::pow(size,-2), increment_rho_thermals = 0.1, max_rho_thermals = 1., curr_rho_thernals = 0.;
 
 const int max_range = 10;
+const Objects::Color thermal_color = Objects::Color(1.,0.,0.), drone_color = Objects::Color(1.,1.,1.);
 
-const Color thermal_color = Color(1.,0.,0.), drone_color = Color(1.,1.,1.);
-Rect** lattice;
-std::vector<Cell> drones;
-std::vector<Cell> thermals_list;
+Objects::Rect** lattice;
+std::vector<Objects::Cell> drones;
+std::vector<Objects::Cell> thermals_list;
 std::pair<bool,int> **thermals;
 
-std::vector<float> velocity;
-std::vector<float> averageVelocity;
-float sumAverageV = 0, sumStddev = 0;
+std::vector<float> velocity, average_velocity;
+float sum_averagev = 0, sum_stddev = 0;
 
-FILE* outputVelocity;
-int windowId;	
+FILE* output_velocity;
+int window_id;	
 
-bool isSingle = false, isInteraction = false, breakLoop = false, isVisualize = false, isWriteToFile = false;
+bool is_single = false, is_interaction = false, break_loop = false, is_visualize = false, is_write_to_file = false;
 
 volatile sig_atomic_t flag = 0;
-void my_function(int sig)
+void close(int sig)
 {
     flag = 1;
 }
 
 void init()
 {
-	signal(SIGINT, my_function); 
+	signal(SIGINT, close); 
 	srand48(time(NULL));
 	float rect_size = 1./size;
-	lattice = new Rect*[size];
+	lattice = new Objects::Rect*[size];
 	thermals = new std::pair<bool,int>*[size];
 	for(size_t x = 0; x < size; x++)
 	{
-		lattice[x] = new Rect[size];
+		lattice[x] = new Objects::Rect[size];
 		thermals[x] = new std::pair<bool,int>[size];
 		for(size_t y = 0; y < size; y++)
 		{
-			lattice[x][y] = Rect(2*float(x)/size - 1.,2*float(y)/size - 1.,2*float(x)/size - 1. + 2*rect_size,2*float(y)/size - 1. + 2*rect_size);
+			lattice[x][y] = Objects::Rect(2*float(x)/size - 1.,2*float(y)/size - 1.,2*float(x)/size - 1. + 2*rect_size,2*float(y)/size - 1. + 2*rect_size);
 			thermals[x][y] = std::pair<bool,int>(false,0);
 		}
 	}
 
 	drones.resize(n_drones);
 	velocity.resize(n_drones);	
-	averageVelocity.resize(simulation_length);
-	if(isWriteToFile)
+	average_velocity.resize(simulation_length);
+	if(is_write_to_file)
 	{
-		outputVelocity = fopen("outputVelocity.dat","a+");
-		fprintf(outputVelocity, "\n");
+		output_velocity = fopen("outputVelocity.dat","a+");
+		fprintf(output_velocity, "\n");
 	}
 }
 
@@ -101,7 +94,7 @@ void initSimulation()
 		{
 			if(drand48() < rho_thermals)
 			{
-				thermals_list.push_back(Cell(x,y));
+				thermals_list.push_back(Objects::Cell(x,y));
 				thermals[x][y].first = true;
 			}
 		}
@@ -111,7 +104,7 @@ void initSimulation()
 
 	for(size_t i = 0; i < n_drones; i++)
 	{
-		Cell thermal = thermals_list[std::floor(drand48()*(thermals_list.size()-1))];
+		Objects::Cell thermal = thermals_list[std::floor(drand48()*(thermals_list.size()-1))];
 		drones[i] = thermal;
 		thermals[thermal.x][thermal.y].second++;		
 	}
@@ -119,17 +112,15 @@ void initSimulation()
 
 void exit()
 {
-	if(!isSingle)
-		fclose(outputVelocity);
-	breakLoop = true;
-	if(isVisualize)
+	if(!is_single)
+		fclose(output_velocity);
+	break_loop = true;
+	if(is_visualize)
 	{
-		glutDestroyWindow(windowId);
+		glutDestroyWindow(window_id);
 		exit(0);
 	}
 }
-
-
 
 void moveDrones()
 {
@@ -137,11 +128,12 @@ void moveDrones()
 		return;
 
 	int i = 0;
+	float lambda = 1./3.65;
 	for(auto &d : drones)
 	{
 		int dx = std::floor(drand48()*(float(max_range)/2+1));
 		int dy = std::floor(drand48()*(float(max_range)/2+1));
-		if(drand48() > std::exp(-std::max(dx,dy)))
+		if(drand48() > std::exp(-lambda*std::max(dx,dy)))
 			continue;
 		
 		int old_x = d.x;
@@ -150,16 +142,16 @@ void moveDrones()
 		d.y = Utils::mod(d.y + dy,size);
 		if(!thermals[d.x][d.y].first)
 		{
-			if(isInteraction)
+			if(is_interaction)
 			{
 				std::vector<std::pair<int,int> > can_go;
 				can_go.reserve(max_range*max_range);
-				for(int x = -max_range + dx; x <= max_range - dx; x++)
-				// uncomment different loops for different model
-				// for(int x = -max_range/2; x <= max_range/2; x++)
+				// switch loops for different models
+				// for(int x = -max_range + dx; x <= max_range - dx; x++)
+				for(int x = -max_range/2; x <= max_range/2; x++)
 				{
-					for(int y =	-max_range + dy; y <= max_range - dy; y++)
-					// for(int y =	-max_range/2; y <= max_range/2; y++)
+					// for(int y =	-max_range + dy; y <= max_range - dy; y++)
+					for(int y =	-max_range/2; y <= max_range/2; y++)
 					{
 						int n_x = Utils::mod(d.x + x,size);
 						int n_y = Utils::mod(d.y + y,size);
@@ -180,11 +172,12 @@ void moveDrones()
 		thermals[old_x][old_y].second--;	
 		thermals[d.x][d.y].second++; 
 		
-		if(!isSingle)
+		if(!is_single)
 		{
 			int vx = Utils::mod_diff(d.x,old_x,size);
 			int vy = Utils::mod_diff(d.y,old_y,size);
 			velocity[i] = std::sqrt(vx*vx + vy*vy);
+			velocity[i] = vx;
 			i++;
 		}	
 	}
@@ -192,22 +185,22 @@ void moveDrones()
 
 void measure()
 {
-	if(isSingle)
+	if(is_single)
 		return;
 
 	if(frame_long > simulation_threshold)
 	{
-		averageVelocity[frame_long - simulation_threshold] = Utils::mean(velocity);
+		average_velocity[frame_long - simulation_threshold] = Utils::mean(velocity);
 	}
+
 	if(frame_long == simulation_threshold + simulation_length)
 	{
-		float averageV = Utils::mean(averageVelocity);
+		float averagev = Utils::mean(average_velocity);
 		float sum = 0;
-		for(auto v : averageVelocity)
-			sum += (v - averageV)*(v - averageV);
-
-		sumStddev += std::sqrt(sum/simulation_length);
-		sumAverageV += averageV;
+		for(auto v : average_velocity)
+			sum += (v - averagev)*(v - averagev);
+		sum_stddev += std::sqrt(sum/simulation_length);
+		sum_averagev += averagev;
 		simulations_count++;
 		frame_long = 0;
 		initSimulation();
@@ -215,17 +208,16 @@ void measure()
 
 	if(simulations_count == average_count)
 	{
-		sumAverageV /= simulations_count;
-		sumStddev /= simulations_count;
-		printf("rho=%.3f, avgerageV=%.2f, stdev=%.2f\n", rho_thermals, sumAverageV, sumStddev);
-		if(isWriteToFile)
-			fprintf(outputVelocity, "%f %f %f\n", rho_thermals, sumAverageV, sumStddev);
-		sumAverageV = 0;
-		sumStddev = 0;
+		sum_averagev /= simulations_count;
+		sum_stddev /= simulations_count;
+		printf("rho=%.3f, avgerageV=%.2f, stdev=%.2f\n", rho_thermals, sum_averagev, sum_stddev);
+		if(is_write_to_file)
+			fprintf(output_velocity, "%f %f %f\n", rho_thermals, sum_averagev, sum_stddev);
+		sum_averagev = 0;
+		sum_stddev = 0;
 		simulations_count = 0;
 		frame_long = 0;
 		rho_thermals += increment_rho_thermals;
-		
 		if(rho_thermals >= max_rho_thermals)
 			exit();
 		initSimulation();
@@ -252,7 +244,7 @@ void display(void) {
   		int y = thermal.y;
   		glRectf(lattice[x][y].x1,lattice[x][y].y1,lattice[x][y].x2,lattice[x][y].y2);			
 	}
-  	glColor4f(drone_color.r, drone_color.g, drone_color.b, 0.4f);
+  	glColor4f(drone_color.r, drone_color.g, drone_color.b, 0.2f);
 	for(auto drone : drones)
   	{
   		int x = drone.x;
@@ -316,7 +308,7 @@ void loop()
 {
 	init();
 	initSimulation();
-	while(!breakLoop)
+	while(!break_loop)
 	{
 		moveDrones();
 		measure();
@@ -336,7 +328,7 @@ void loopGlut(int argc, char **argv)
 	glutInit(&argc, argv);
 	glutInitDisplayMode(GLUT_RGBA | GLUT_DEPTH | GLUT_DOUBLE | GLUT_ALPHA);
 	glutInitWindowSize(width,height);
-	windowId = glutCreateWindow("Unlimited Gliding");
+	window_id = glutCreateWindow("Unlimited Gliding");
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 	glClearColor(0.f, 0.f, 0.f, 1.f);
@@ -381,13 +373,13 @@ void parseParamsFile(int argc, char** argv)
 	std::string line;	
 	std::string delimiter = "=";
 	getValue(file,delimiter,line);
-	parseBool(line, isSingle);
+	parseBool(line, is_single);
 	getValue(file,delimiter,line);
-	parseBool(line, isVisualize);
+	parseBool(line, is_visualize);
 	getValue(file,delimiter,line);
-	parseBool(line, isInteraction);
+	parseBool(line, is_interaction);
 	getValue(file,delimiter,line);
-	parseBool(line, isWriteToFile);
+	parseBool(line, is_write_to_file);
 	
 	getValue(file,delimiter,line);
 	size = std::stof(line);
@@ -412,6 +404,6 @@ void parseParamsFile(int argc, char** argv)
 int main(int argc, char **argv)
 {
 	parseParamsFile(argc,argv);
-	isVisualize ? loopGlut(argc,argv) : loop();
+	is_visualize ? loopGlut(argc,argv) : loop();
 	return 0;
 }
