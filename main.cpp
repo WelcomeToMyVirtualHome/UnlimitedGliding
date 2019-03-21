@@ -24,10 +24,10 @@ int reftime = 0,frame = 0, c_time = 0, timebase = 0;
 unsigned long long frame_long = 0, simulation_threshold = 5000, simulation_length = 1000;
 int simulations_count = 0, average_count = 1;
 
-size_t size = 40, n_thermals = 400, n_drones = 100, n_measurments = 1;
+int size = 40, n_thermals = 400, n_drones = 100, n_measurments = 1;
 float rho_thermals = n_thermals * std::pow(size,-2), increment_rho_thermals = 0.1, max_rho_thermals = 1., curr_rho_thernals = 0.;
 
-const int max_range = 10;
+int max_range = 20;
 const Objects::Color thermal_color = Objects::Color(1.,0.,0.), drone_color = Objects::Color(1.,1.,1.);
 
 Objects::Rect** lattice;
@@ -35,13 +35,14 @@ std::vector<Objects::Cell> drones;
 std::vector<Objects::Cell> thermals_list;
 std::pair<bool,int> **thermals;
 
-std::vector<float> velocity, average_velocity;
+std::vector<float> velocity, average_velocity, average_h;
 float sum_averagev = 0, sum_stddev = 0;
 
 FILE* output_velocity;
+FILE* output_clustering;
 int window_id;	
 
-bool is_single = false, is_interaction = false, break_loop = false, is_visualize = false, is_write_to_file = false;
+bool is_single = false, is_interaction = false, break_loop = false, is_visualize = false, is_write_to_file = false, is_measure_speed = false, is_measure_clustering = false, is_exit = false;
 
 volatile sig_atomic_t flag = 0;
 void close(int sig)
@@ -56,11 +57,11 @@ void init()
 	float rect_size = 1./size;
 	lattice = new Objects::Rect*[size];
 	thermals = new std::pair<bool,int>*[size];
-	for(size_t x = 0; x < size; x++)
+	for(int x = 0; x < size; x++)
 	{
 		lattice[x] = new Objects::Rect[size];
 		thermals[x] = new std::pair<bool,int>[size];
-		for(size_t y = 0; y < size; y++)
+		for(int y = 0; y < size; y++)
 		{
 			lattice[x][y] = Objects::Rect(2*float(x)/size - 1.,2*float(y)/size - 1.,2*float(x)/size - 1. + 2*rect_size,2*float(y)/size - 1. + 2*rect_size);
 			thermals[x][y] = std::pair<bool,int>(false,0);
@@ -68,29 +69,38 @@ void init()
 	}
 
 	drones.resize(n_drones);
-	velocity.resize(n_drones);	
+	velocity.resize(n_drones);
 	average_velocity.resize(simulation_length);
+	average_h.resize(size,0.f);	
 	if(is_write_to_file)
 	{
-		output_velocity = fopen("outputVelocity.dat","a+");
-		fprintf(output_velocity, "\n");
+		if(is_measure_speed)
+		{
+			output_velocity = fopen("outputVelocity.dat","a+");
+			fprintf(output_velocity, "\n");
+		}
+		if(is_measure_clustering)
+		{
+			output_clustering = fopen("outputClustering.dat","a+");
+			fprintf(output_clustering, "\n");
+		}
 	}
 }
 
 void initSimulation()
 {
-	for(size_t x = 0; x < size; x++)
+	for(int x = 0; x < size; x++)
 	{
-		for(size_t y = 0; y < size; y++)
+		for(int y = 0; y < size; y++)
 		{
 			thermals[x][y].first = false;
 			thermals[x][y].second = 0;
 		}
 	}
 	thermals_list.clear();
-	for(size_t x = 0; x < size; x++)
+	for(int x = 0; x < size; x++)
 	{
-		for(size_t y = 0; y < size; y++)
+		for(int y = 0; y < size; y++)
 		{
 			if(drand48() < rho_thermals)
 			{
@@ -102,7 +112,7 @@ void initSimulation()
 	if(thermals_list.empty())
 		return;
 
-	for(size_t i = 0; i < n_drones; i++)
+	for(int i = 0; i < n_drones; i++)
 	{
 		Objects::Cell thermal = thermals_list[std::floor(drand48()*(thermals_list.size()-1))];
 		drones[i] = thermal;
@@ -112,8 +122,14 @@ void initSimulation()
 
 void exit()
 {
-	if(!is_single)
-		fclose(output_velocity);
+	if(is_write_to_file)
+	{
+		if(is_measure_speed)
+			fclose(output_velocity);
+		if(is_measure_clustering)
+			fclose(output_clustering);
+	}
+
 	break_loop = true;
 	if(is_visualize)
 	{
@@ -128,12 +144,12 @@ void moveDrones()
 		return;
 
 	int i = 0;
-	float lambda = 1./3.65;
+	float lambda = 1./3.75;
 	for(auto &d : drones)
 	{
 		int dx = std::floor(drand48()*(float(max_range)/2+1));
-		int dy = std::floor(drand48()*(float(max_range)/2+1));
-		if(drand48() > std::exp(-lambda*std::max(dx,dy)))
+		int dy = std::floor(drand48()*(float(max_range)/2+1))-float(max_range)/4;
+		if(drand48() > std::exp(-lambda*std::max(dx,std::abs(dy))))
 			continue;
 		
 		int old_x = d.x;
@@ -146,12 +162,9 @@ void moveDrones()
 			{
 				std::vector<std::pair<int,int> > can_go;
 				can_go.reserve(max_range*max_range);
-				// switch loops for different models
-				// for(int x = -max_range + dx; x <= max_range - dx; x++)
-				for(int x = -max_range/2; x <= max_range/2; x++)
+				for(int x = -max_range + dx; x <= max_range - dx; x++)
 				{
-					// for(int y =	-max_range + dy; y <= max_range - dy; y++)
-					for(int y =	-max_range/2; y <= max_range/2; y++)
+					for(int y =	-max_range + dy; y <= max_range - dy; y++)
 					{
 						int n_x = Utils::mod(d.x + x,size);
 						int n_y = Utils::mod(d.y + y,size);
@@ -172,15 +185,34 @@ void moveDrones()
 		thermals[old_x][old_y].second--;	
 		thermals[d.x][d.y].second++; 
 		
-		if(!is_single)
+		if(is_measure_speed)
 		{
 			int vx = Utils::mod_diff(d.x,old_x,size);
-			int vy = Utils::mod_diff(d.y,old_y,size);
-			velocity[i] = std::sqrt(vx*vx + vy*vy);
-			velocity[i] = vx;
-			i++;
+			velocity[i++] = vx;
 		}	
 	}
+}
+
+void ripleyEstimator()
+{
+	for(int r = 0; r < std::floor(float(size)/2); r++)
+	{	
+		float K_r = 0;
+		for(int i = 0; i < n_drones; i++)
+		{
+			for(int j = 0; j < n_drones; j++)
+			{
+				if(j == i)
+					break;
+				int r_x = Utils::mod_diff(drones[i].x, drones[j].x, size);
+				int r_y = Utils::mod_diff(drones[i].y, drones[j].y, size);
+				if(int(r_x*r_x + r_y*r_y) < r*r)
+					K_r += 1;
+			}
+		}
+		average_h[r] += std::sqrt(2*K_r*size*size/(n_drones*n_drones)/M_PI) - r;
+	}
+
 }
 
 void measure()
@@ -188,38 +220,73 @@ void measure()
 	if(is_single)
 		return;
 
-	if(frame_long > simulation_threshold)
+	if(frame_long == simulation_threshold && is_measure_clustering)
+		ripleyEstimator();
+
+	if(frame_long > simulation_threshold && is_measure_speed)
 	{
 		average_velocity[frame_long - simulation_threshold] = Utils::mean(velocity);
 	}
 
 	if(frame_long == simulation_threshold + simulation_length)
 	{
-		float averagev = Utils::mean(average_velocity);
-		float sum = 0;
-		for(auto v : average_velocity)
-			sum += (v - averagev)*(v - averagev);
-		sum_stddev += std::sqrt(sum/simulation_length);
-		sum_averagev += averagev;
-		simulations_count++;
+		if(is_measure_speed)
+		{
+			float averagev = Utils::mean(average_velocity);
+			float sum = 0;
+			for(auto v : average_velocity)
+				sum += (v - averagev)*(v - averagev);
+			sum_stddev += std::sqrt(sum/simulation_length);
+			sum_averagev += averagev;
+		}
+
+		simulations_count++;	
 		frame_long = 0;
+		
 		initSimulation();
 	}
 
 	if(simulations_count == average_count)
 	{
-		sum_averagev /= simulations_count;
-		sum_stddev /= simulations_count;
-		printf("rho=%.3f, avgerageV=%.2f, stdev=%.2f\n", rho_thermals, sum_averagev, sum_stddev);
+		if(is_measure_speed)
+		{
+			sum_averagev /= average_count;
+			sum_stddev /= average_count;
+			printf("rho=%.3f, avgerageV=%.2f, stdev=%.2f\n", rho_thermals, sum_averagev, sum_stddev);
+		}
+		if(is_measure_clustering)
+		{
+			printf("rho=%.3f\n", rho_thermals);			
+		}
+
 		if(is_write_to_file)
-			fprintf(output_velocity, "%f %f %f\n", rho_thermals, sum_averagev, sum_stddev);
+		{
+			if(is_measure_speed)
+				fprintf(output_velocity, "%f %f %f\n", rho_thermals, sum_averagev, sum_stddev);
+			if(is_measure_clustering)
+			{	
+				for(uint r = 0; r < std::floor(float(size)/2); r++)
+				{
+					fprintf(output_clustering, "%f %u %f\n", rho_thermals, r, average_h[r]/average_count);
+					average_h[r] = 0;
+				}
+			}
+		}
+	
 		sum_averagev = 0;
 		sum_stddev = 0;
 		simulations_count = 0;
 		frame_long = 0;
+		
 		rho_thermals += increment_rho_thermals;
-		if(rho_thermals >= max_rho_thermals)
+		if(rho_thermals >= max_rho_thermals && !is_exit)
+		{
+			rho_thermals = 1.;
+			is_exit = true;
+		}
+		else if(rho_thermals >= 1. && is_exit)
 			exit();
+		
 		initSimulation();
 	}
 }
@@ -229,9 +296,43 @@ void print(double x, double y, char *string)
 	glPushAttrib(GL_CURRENT_BIT);
 	glColor4f(1.f,1.f,1.f,1.f);
 	glRasterPos2f(x,y);
-	for (size_t i = 0; i < strlen(string); i++) 
+	for(size_t i = 0; i < strlen(string); i++) 
 		glutBitmapCharacter(GLUT_BITMAP_TIMES_ROMAN_10,string[i]);
 	glPopAttrib();
+}
+
+void Timer(int iUnused)
+{
+	glutPostRedisplay();
+	glutTimerFunc(reftime, Timer, 0);
+}
+
+void keyboard(int key, int x, int y)
+{
+	switch(key)
+	{
+  		case GLUT_KEY_UP:
+			if(reftime == 0)
+				break;
+			reftime -= 1;
+			break;
+      	case GLUT_KEY_DOWN:
+  			reftime += 1;
+			break;
+		default: 
+			break;
+	}
+}
+
+void keyboardCB(unsigned char key, int x, int y)
+{
+	switch(key)
+	{
+		case 27:
+			exit();
+			break;
+	}
+	glutPostRedisplay();
 }
 
 void display(void) {
@@ -254,7 +355,7 @@ void display(void) {
 
 	moveDrones();
 	measure();
-
+	
 	frame++;
 	frame_long++;
 	c_time = glutGet(GLUT_ELAPSED_TIME);
@@ -268,40 +369,6 @@ void display(void) {
     print(-1,-1,buffer);
 
 	glutSwapBuffers();
-}
-
-void Timer(int iUnused)
-{
-	glutPostRedisplay();
-	glutTimerFunc(reftime, Timer, 0);
-}
-
-void keyboard(int key, int x, int y)
-{
-	switch(key)
-	{
-  		case GLUT_KEY_UP:
-  			reftime += 1;
-			break;
-      	case GLUT_KEY_DOWN:
-			if(reftime == 0)
-				break;
-			reftime -= 1;
-			break;
-		default: 
-			break;
-	}
-}
-
-void keyboardCB(unsigned char key, int x, int y)
-{
-	switch(key)
-	{
-		case 27:
-			exit();
-			break;
-	}
-	glutPostRedisplay();
 }
 
 void loop()
@@ -380,11 +447,17 @@ void parseParamsFile(int argc, char** argv)
 	parseBool(line, is_interaction);
 	getValue(file,delimiter,line);
 	parseBool(line, is_write_to_file);
+	getValue(file,delimiter,line);
+	parseBool(line, is_measure_speed);
+	getValue(file,delimiter,line);
+	parseBool(line, is_measure_clustering);
 	
 	getValue(file,delimiter,line);
 	size = std::stof(line);
 	getValue(file,delimiter,line);
 	n_drones = std::stof(line);
+	getValue(file,delimiter,line);
+	max_range = std::stof(line);
 	getValue(file,delimiter,line);
 	rho_thermals = std::stof(line);
 	getValue(file,delimiter,line);
