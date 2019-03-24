@@ -24,7 +24,7 @@ int reftime = 0,frame = 0, c_time = 0, timebase = 0;
 unsigned long long frame_long = 0, simulation_threshold = 5000, simulation_length = 1000;
 int simulations_count = 0, average_count = 1;
 
-int size = 40, n_thermals = 400, n_drones = 100, n_measurments = 1;
+int size = 40, n_thermals = 400, n_drones = 100, n_measurments = 1, curr_measurment = 0;
 float rho_thermals = n_thermals * std::pow(size,-2), increment_rho_thermals = 0.1, max_rho_thermals = 1., curr_rho_thernals = 0.;
 
 int max_range = 20;
@@ -42,7 +42,7 @@ FILE* output_velocity;
 FILE* output_clustering;
 int window_id;	
 
-bool is_single = false, is_interaction = false, break_loop = false, is_visualize = false, is_write_to_file = false, is_measure_speed = false, is_measure_clustering = false, is_exit = false;
+bool is_single = false, is_interaction = false, break_loop = false, is_visualize = false, is_write_to_file = false, is_measure_speed = false, is_measure_clustering = false, is_exit = false, pause = false;
 
 volatile sig_atomic_t flag = 0;
 void close(int sig)
@@ -212,7 +212,6 @@ void ripleyEstimator()
 		}
 		average_h[r] += std::sqrt(2*K_r*size*size/(n_drones*n_drones)/M_PI) - r;
 	}
-
 }
 
 void measure()
@@ -277,16 +276,13 @@ void measure()
 		sum_stddev = 0;
 		simulations_count = 0;
 		frame_long = 0;
-		
-		rho_thermals += increment_rho_thermals;
-		if(rho_thermals >= max_rho_thermals && !is_exit)
-		{
-			rho_thermals = 1.;
-			is_exit = true;
-		}
-		else if(rho_thermals >= 1. && is_exit)
+		if(curr_measurment == n_measurments)
 			exit();
-		
+
+		curr_measurment++;
+		if(rho_thermals < 1.)
+			rho_thermals += increment_rho_thermals;
+
 		initSimulation();
 	}
 }
@@ -331,11 +327,17 @@ void keyboardCB(unsigned char key, int x, int y)
 		case 27:
 			exit();
 			break;
+		case 112:
+			pause = !pause;
+			break;
 	}
 	glutPostRedisplay();
 }
 
 void display(void) {
+	if(pause)
+		return;
+
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
   	
   	glColor4f(thermal_color.r, thermal_color.g, thermal_color.b, 0.6f);
