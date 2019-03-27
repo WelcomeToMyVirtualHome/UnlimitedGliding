@@ -195,22 +195,22 @@ void moveDrones()
 
 void ripleyEstimator()
 {
-	for(int r = 0; r < std::floor(float(size)/2); r++)
+	for(int r = 0; r < std::floor(float(size)/2) + 1; r++)
 	{	
 		float K_r = 0;
 		for(int i = 0; i < n_drones; i++)
 		{
 			for(int j = 0; j < n_drones; j++)
 			{
-				if(j == i)
-					break;
 				int r_x = Utils::mod_diff(drones[i].x, drones[j].x, size);
 				int r_y = Utils::mod_diff(drones[i].y, drones[j].y, size);
-				if(int(r_x*r_x + r_y*r_y) < r*r)
+				if(std::abs(r_x) <= r && std::abs(r_y) <= r)
+				// if(int(r_x*r_x + r_y*r_y) < r*r)
 					K_r += 1;
 			}
 		}
-		average_h[r] += std::sqrt(2*K_r*size*size/(n_drones*n_drones)/M_PI) - r;
+		// average_h[r] += std::sqrt(K_r*size*size/(n_drones*n_drones)/2) - r/2;
+		average_h[r] += std::sqrt(K_r*size*size/(n_drones*n_drones)) - 2*r;
 	}
 }
 
@@ -264,7 +264,7 @@ void measure()
 				fprintf(output_velocity, "%f %f %f\n", rho_thermals, sum_averagev, sum_stddev);
 			if(is_measure_clustering)
 			{	
-				for(uint r = 0; r < std::floor(float(size)/2); r++)
+				for(uint r = 0; r < std::floor(float(size)/2) + 1; r++)
 				{
 					fprintf(output_clustering, "%f %u %f\n", rho_thermals, r, average_h[r]/average_count);
 					average_h[r] = 0;
