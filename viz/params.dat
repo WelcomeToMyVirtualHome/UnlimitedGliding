@@ -1,0 +1,7 @@
+interaction =y
+lattice size =200
+number of drones =500
+max range x =20
+max range y =10
+history length =0
+rho thermals =0.12

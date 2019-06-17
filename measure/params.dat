@@ -1,0 +1,15 @@
+interaction =y
+measure speed =y
+measure clustering =y
+lattice size =200
+number of drones =500
+max range x =20
+max range y =20
+history length =1
+initial rho thermals =0.001
+max rho thermals =1.
+n measurments =10
+average over n simulations =1
+simulation threshold =1000
+simulation length =1000
+threads =1
