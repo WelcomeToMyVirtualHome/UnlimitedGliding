@@ -8,7 +8,8 @@ public:
 	const std::string READFILE = "f";
 
 	unsigned long long simulation_threshold = 0,
-		simulation_length = 0;
+		simulation_v_length = 0,
+		simulation_h_length = 0;
 
 	int simulations_count = 0,
 		average_count = 0,
@@ -91,7 +92,9 @@ public:
 		getValue(file,delimiter,line);
 		simulation_threshold = std::stod(line);
 		getValue(file,delimiter,line);
-		simulation_length = std::stod(line);
+		simulation_v_length = std::stod(line);
+		getValue(file,delimiter,line);
+		simulation_h_length = std::stod(line);
 		getValue(file,delimiter,line);
 		n_threads = std::stod(line);
 		file.close();

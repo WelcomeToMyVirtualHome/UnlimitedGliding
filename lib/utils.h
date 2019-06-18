@@ -1,5 +1,6 @@
 #pragma once
 #include <vector>
+#include <cmath>
 
 namespace Utils
 {
@@ -26,5 +27,14 @@ namespace Utils
 		for(auto it = begin(v); it != end(v); ++it)
 			sum += *it;
 		return sum/v.size();
+	}
+
+	inline std::pair<float, float> stdev(std::vector<float> v)
+	{
+		float averagev = Utils::mean(v);
+		float sum = 0;
+		for(auto vi : v)
+			sum += (vi - averagev)*(vi - averagev);
+		return std::pair<float, float>(averagev, sqrt(sum / (v.size() - 1)));
 	}
 }

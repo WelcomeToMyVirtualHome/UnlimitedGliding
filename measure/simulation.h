@@ -45,14 +45,16 @@ public:
 
 	unsigned long long frame_long = 0;
 	int curr_measurment = 0,
-		simulations_count = 0;
+		simulations_count = 0,
+		id = 0;
 	
-	Simulation(int id, Params *params, float n_start_rho_thermals, float n_end_rho_thermals)
+	Simulation(int n_id, Params *params, float n_start_rho_thermals, float n_end_rho_thermals)
 	{
+		id = n_id;
 		p = params;
 		rho_thermals = n_start_rho_thermals;
 		end_rho_thermals = n_end_rho_thermals;
-		increment_rho_thermals = (end_rho_thermals - rho_thermals) / p->n_measurments;
+		increment_rho_thermals = (end_rho_thermals - rho_thermals) / (std::floor(float(p->n_measurments) / p->n_threads));
 		init();
 	}
 
@@ -71,17 +73,17 @@ public:
 		drones.resize(p->n_drones);
 		drones_history.resize(p->n_drones);
 		velocity.resize(p->n_drones);
-		average_velocity.resize(p->simulation_length);
+		average_velocity.resize(p->simulation_v_length);
 		average_h.resize(p->size,0.f);	
 		if(p->is_measure_speed)
 		{
-			output_velocity = fopen("outputVelocity.dat","a+");
-			fprintf(output_velocity, "\n");
+			std::string filename = std::string("measure_out/velocity/") + std::string("output_velocity") + std::to_string(id) + std::string(".dat");
+			output_velocity = fopen(filename.c_str(), "w+");
 		}
 		if(p->is_measure_clustering)
 		{
-			output_clustering = fopen("outputClustering.dat","a+");
-			fprintf(output_clustering, "\n");	
+			std::string filename = std::string("measure_out/clustering/") + std::string("output_clustering") + std::to_string(id) + std::string(".dat");
+			output_clustering = fopen(filename.c_str(), "w+");
 		}
 	}
 
@@ -215,69 +217,79 @@ public:
 
 	void exit()
 	{
+		break_loop = true;
 		if(p->is_measure_speed)
 			fclose(output_velocity);
 		if(p->is_measure_clustering)
 			fclose(output_clustering);
-		break_loop = true;
 	}
 
 	void measure()
 	{
 		if(curr_measurment == std::floor(float(p->n_measurments / p->n_threads)))
+		{
 			exit();
-
-		if(frame_long == p->simulation_threshold && p->is_measure_clustering)
-			ripleyEstimator();
-
-		if(frame_long >p-> simulation_threshold && p->is_measure_speed)
-		{
-			average_velocity[frame_long - p->simulation_threshold] = Utils::mean(velocity);
 		}
-		if(frame_long == p->simulation_threshold + p->simulation_length)
+
+		if(p->is_measure_clustering)
 		{
-			if(p->is_measure_speed)
+			if(frame_long > p->simulation_threshold && frame_long <= p->simulation_threshold + p->simulation_h_length)
 			{
-				float averagev = Utils::mean(average_velocity);
-				float sum = 0;
-				for(auto v : average_velocity)
-					sum += (v - averagev)*(v - averagev);
-				sum_stddev += std::sqrt(sum/p->simulation_length);
-				sum_averagev += averagev;
+				ripleyEstimator();
+			}
+		}
+
+		if(p->is_measure_speed)
+		{
+			if(frame_long > p->simulation_threshold)
+			{
+				average_velocity[frame_long - p->simulation_threshold] = Utils::mean(velocity);
 			}
 
-			simulations_count++;	
+			if(frame_long == p->simulation_threshold + p->simulation_v_length)
+			{
+				std::pair<float, float> sd = Utils::stdev(average_velocity);
+				sum_stddev += sd.second;
+				sum_averagev += sd.first;
+			}			
+		}
+
+		if(frame_long >= p->simulation_threshold + std::max(p->simulation_h_length, p->simulation_v_length))
+		{
+			simulations_count++;
 			frame_long = 0;		
 			initSimulation();
 		}
 
 		if(simulations_count == p->average_count)
 		{
-			printf("%d\n",simulations_count);
+			printf("Simulation = %d, rho = %.3f\n", id, rho_thermals);
 			if(p->is_measure_speed)
 			{
 				sum_averagev /= p->average_count;
 				sum_stddev /= p->average_count;
 				fprintf(output_velocity, "%f %f %f\n", rho_thermals, sum_averagev, sum_stddev);
 			}
+
 			if(p->is_measure_clustering)
 			{	
 				for(uint r = 0; r < std::floor(float(p->size)/2) + 1; r++)
 				{
-					fprintf(output_clustering, "%f %u %f\n", rho_thermals, r, average_h[r] / p->average_count);
+					fprintf(output_clustering, "%.3f %u %.3f\n", rho_thermals, r, average_h[r] / p->average_count / p->simulation_h_length);
 					average_h[r] = 0;
 				}
 			}
+
 			sum_averagev = 0;
 			sum_stddev = 0;
-			simulations_count = 0;
-			frame_long = 0;
 		
-			curr_measurment++;
+			simulations_count = 0;
+			curr_measurment++;	
 			if(rho_thermals < 1.)
+			{
 				rho_thermals += increment_rho_thermals;
-
-			initSimulation();
+			}
+			
 		}
 	}
 
