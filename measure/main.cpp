@@ -8,8 +8,8 @@
 #include <string>
 #include <limits.h>
 #include <stdio.h>
-#include "./params.h"
-#include "./simulation.h"
+#include "../lib/params.h"
+#include "../lib/simulation.h"
 #include "../lib/objects.h"
 #include "../lib/utils.h"
 
@@ -40,7 +40,7 @@ void concatenate(std::string file_out, std::string folder_in)
 			if(!input.is_open())
 				std::cerr << "File " << ent->d_name <<  " not opened\n";	
 			std::string line;
-			while(getline(input,line))
+			while(getline(input, line))
 			{
 				output << line << '\n';
 			}
@@ -116,9 +116,18 @@ int main(int argc, char **argv)
 		threads[i].join();
 	}
 
-	concatenate("clustering.dat", "clustering");
+	for(auto s : simulations)
+	{
+		delete s;
+	} 
+    simulations.clear();
+	delete[] threads;
+	delete params;
+
+ 	concatenate("clustering.dat", "clustering");
 	concatenate("velocity.dat", "velocity");
 	auto t2 = std::chrono::high_resolution_clock::now();
 	std::cout << std::chrono::duration_cast<std::chrono::milliseconds>(t2-t1).count()/1000 << " seconds\n";
- 	return 0;
+
+	return 0;
 }

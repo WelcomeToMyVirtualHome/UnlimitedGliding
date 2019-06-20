@@ -1,6 +1,6 @@
 CXX=g++
 CXXFLAGS=-std=c++0x -Wall -pedantic -O3 -pthread
-all:	main
+all:	main	clean
 main:	main.o  
 	$(CXX) -o main main.o $(CXXFLAGS)
 main.o:	main.cpp
