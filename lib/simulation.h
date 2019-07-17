@@ -146,45 +146,59 @@ public:
 		std::uniform_real_distribution<double> dist(0, 1);
 		for(int i = 0; i < p->n_drones; i++)
 		{
+			// random biased movement within specified range  
 			int dx = std::floor(dist(gen)*(float(p->max_range_x)/2+1));
-			int dy = std::floor(dist(gen)*(float(p->max_range_y)/2+1))-float(p->max_range_y)/4;
-			if(dist(gen) > 1/p->lambda*std::exp(-p->lambda*std::max(dx, dy)))
+			int dy = std::floor(dist(gen)*(float(p->max_range_y)+1)) - float(p->max_range_y)/2;
+			if(dist(gen) > std::exp(-p->lambda*dx))
 				continue;
-			
+
 			Objects::Cell &d = drones[i];
 			Objects::Cell prev = Objects::Cell(d.x, d.y);
 			d.x = Utils::mod(d.x + dx, p->size);
 			d.y = Utils::mod(d.y + dy, p->size);
+			
+			// thermal present in [d.x, d.y]
 			if(!thermals[d.x][d.y].first)
 			{
 				if(p->is_interaction)
 				{
 					Objects::Cell min_thermal(0,0);
-					int max_capacity = p->n_drones;
+					int min_capacity = p->n_drones;
+					// search for thermals within 
 					for(int x = -p->max_range_x + dx; x <= p->max_range_x - dx; x++)
 					{
-						for(int y =	-p->max_range_y/2 + dy; y <= p->max_range_y/2 - dy; y++)
+						for(int y =	-p->max_range_y + dy; y <= p->max_range_y - dy; y++)
 						{
 							int n_x = Utils::mod(d.x + x, p->size);
 							int n_y = Utils::mod(d.y + y, p->size);
+							// check if thermal is occupied by a drone
 							if(thermals[n_x][n_y].second > 0)
 							{
-								if(p->is_go_to_min_thermal)
+								if(p->information_radius > 0)
 								{
-									if(thermals[n_x][n_y].second <= max_capacity)
+									if(std::abs(n_x - d.x) <= p->information_radius && std::abs(n_y - d.y) <= p->information_radius)
 									{
-										max_capacity = thermals[n_x][n_y].second;
-										min_thermal.x = n_x;
-										min_thermal.y = n_y;
-									}
+										can_go.push_back(Objects::Cell(n_x,n_y));
+									}					
 								}
 								else
 								{
 									can_go.push_back(Objects::Cell(n_x,n_y));
 								}
+								// should a drone go to thermal with least number of drones 
+								if(p->is_go_to_min_thermal)
+								{
+									if(thermals[n_x][n_y].second <= min_capacity)
+									{
+										min_capacity = thermals[n_x][n_y].second;
+										min_thermal.x = n_x;
+										min_thermal.y = n_y;
+									}
+								}
 							}
 						}
 					}
+
 					if(p->is_go_to_min_thermal)
 					{
 						d.x = min_thermal.x;
@@ -198,13 +212,17 @@ public:
 						can_go.clear();
 					}
 				}
+				// return to previous position
 				else
 				{
 					d.x = prev.x;
 					d.y = prev.y;
 				}
 			}
+
 			thermals[d.x][d.y].second++;
+			
+			// store history_len previous positions of a drone
 			if(p->is_interaction && p->history_len > 0 && drones_history[i].size() < (uint)p->history_len + 1)
 			{
 				drones_history[i].push_back(d);
@@ -217,6 +235,7 @@ public:
 			else if(p->history_len == 0)	
 				thermals[prev.x][prev.y].second--;	
 			
+
 			if(p->is_measure_speed)
 			{
 				int vx = Utils::mod_diff(d.x, prev.x, p->size);
@@ -237,7 +256,9 @@ public:
 					int r_x = Utils::mod_diff(drones[i].x, drones[j].x, p->size);
 					int r_y = Utils::mod_diff(drones[i].y, drones[j].y, p->size);
 					if(std::abs(r_x) <= r && std::abs(r_y) <= r)
+					{
 						K_r += 1;
+					}
 				}
 			}
 			average_h[r] += std::sqrt(K_r*p->size*p->size/(p->n_drones*p->n_drones)) - 2*r;
@@ -248,9 +269,13 @@ public:
 	{
 		break_loop = true;
 		if(p->is_measure_speed)
+		{
 			fclose(output_velocity);
+		}
 		if(p->is_measure_clustering)
+		{
 			fclose(output_clustering);
+		}
 	}
 
 	void measure()
@@ -292,18 +317,18 @@ public:
 
 		if(simulations_count == p->average_count)
 		{
-			printf("Simulation = %d, rho = %.3f\n", id, rho_thermals);
+			printf("Simulation%d, rho = %.3f\n", id, rho_thermals);
 			if(p->is_measure_speed)
 			{
 				sum_averagev /= p->average_count;
 				sum_stddev /= p->average_count;
 				fprintf(output_velocity, "%f %f %f\n", rho_thermals, sum_averagev, sum_stddev);
-				// printf("%f %f %f\n", rho_thermals, sum_averagev, sum_stddev);
+				printf("v = %f, stdev = %f\n", sum_averagev, sum_stddev);
 			}
 
 			if(p->is_measure_clustering)
 			{	
-				for(uint r = 0; r < std::floor(float(p->size)/2) + 1; r++)
+				for(uint r = 1; r < std::floor(float(p->size)/2) + 1; r++)
 				{
 					fprintf(output_clustering, "%.3f %u %.3f\n", rho_thermals, r, average_h[r] / p->average_count / p->simulation_h_length);
 					average_h[r] = 0;

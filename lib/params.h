@@ -20,6 +20,7 @@ public:
 		max_range_x = 0,
 		max_range_y = 0,
 		history_len = 0,
+		information_radius = 0,
 		n_threads = 1;
 
 	float rho_thermals = 0.,
@@ -82,6 +83,8 @@ public:
 		max_range_y = std::stod(line);
 		getValue(file,delimiter,line);
 		history_len = std::stod(line);
+		getValue(file,delimiter,line);
+		information_radius = std::stod(line);
 		getValue(file,delimiter,line);
 		parseBool(line, is_go_to_min_thermal);
 		getValue(file,delimiter,line);

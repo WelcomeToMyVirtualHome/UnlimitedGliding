@@ -1,5 +1,5 @@
 CXX=g++
-CXXFLAGS=-std=c++11 -Wall -pedantic -O3
+CXXFLAGS=-std=c++0x -Wall -pedantic -O3
 LIBS= -lpthread -lglut -lGL -lGLU
 all:	main	clean
 main:	main.o  

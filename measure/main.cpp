@@ -116,6 +116,11 @@ int main(int argc, char **argv)
 		threads[i].join();
 	}
 
+ 	concatenate("clustering.dat", "clustering");
+	concatenate("velocity.dat", "velocity");
+	auto t2 = std::chrono::high_resolution_clock::now();
+	std::cout << std::chrono::duration_cast<std::chrono::milliseconds>(t2-t1).count()/1000 << " seconds\n";
+	
 	for(auto s : simulations)
 	{
 		delete s;
@@ -123,11 +128,6 @@ int main(int argc, char **argv)
     simulations.clear();
 	delete[] threads;
 	delete params;
-
- 	concatenate("clustering.dat", "clustering");
-	concatenate("velocity.dat", "velocity");
-	auto t2 = std::chrono::high_resolution_clock::now();
-	std::cout << std::chrono::duration_cast<std::chrono::milliseconds>(t2-t1).count()/1000 << " seconds\n";
 
 	return 0;
 }
